@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useMemo } from "react"
-import { List, Map, SlidersHorizontal, X, TrendingUp, Shield } from "lucide-react"
+import { useState, useMemo, useEffect, useCallback } from "react"
+import { List, Map, SlidersHorizontal, X, TrendingUp, Shield, AlertCircle } from "lucide-react"
 import { Header } from "@/components/header"
 import { FiltersPanel, type FilterState } from "@/components/filters-panel"
 import { HospitalCard, type Hospital } from "@/components/hospital-card"
@@ -24,85 +24,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 
-// Sample hospital data
-const sampleHospitals: Hospital[] = [
-  {
-    id: "1",
-    name: "Metropolitan Medical Center",
-    address: "123 Healthcare Blvd, Manhattan",
-    distance: 1.2,
-    rating: 4.8,
-    reviewCount: 324,
-    price: 450,
-    originalPrice: 550,
-    availableToday: true,
-    nextSlot: "10:30 AM",
-    services: ["MRI Scan", "CT Scan", "X-Ray", "Ultrasound", "Blood Test"],
-    verified: true,
-  },
-  {
-    id: "2",
-    name: "City General Hospital",
-    address: "456 Medical Park, Brooklyn",
-    distance: 2.5,
-    rating: 4.6,
-    reviewCount: 189,
-    price: 380,
-    availableToday: true,
-    nextSlot: "11:00 AM",
-    services: ["MRI Scan", "X-Ray", "Blood Test", "ECG"],
-    verified: true,
-  },
-  {
-    id: "3",
-    name: "Sunrise Diagnostic Center",
-    address: "789 Health Ave, Queens",
-    distance: 3.8,
-    rating: 4.9,
-    reviewCount: 567,
-    price: 520,
-    originalPrice: 600,
-    availableToday: false,
-    services: ["MRI Scan", "CT Scan", "PET Scan", "Mammography"],
-    verified: true,
-  },
-  {
-    id: "4",
-    name: "Brooklyn Medical Institute",
-    address: "321 Wellness St, Brooklyn",
-    distance: 4.2,
-    rating: 4.4,
-    reviewCount: 142,
-    price: 350,
-    availableToday: true,
-    nextSlot: "2:00 PM",
-    services: ["MRI Scan", "X-Ray", "Ultrasound"],
-  },
-  {
-    id: "5",
-    name: "Queens Health Center",
-    address: "654 Care Drive, Queens",
-    distance: 5.1,
-    rating: 4.7,
-    reviewCount: 298,
-    price: 420,
-    availableToday: true,
-    nextSlot: "3:30 PM",
-    services: ["MRI Scan", "CT Scan", "Blood Test", "Allergy Test"],
-    verified: true,
-  },
-  {
-    id: "6",
-    name: "Premier Radiology",
-    address: "987 Imaging Blvd, Manhattan",
-    distance: 1.8,
-    rating: 4.5,
-    reviewCount: 221,
-    price: 490,
-    availableToday: false,
-    services: ["MRI Scan", "CT Scan", "X-Ray", "Fluoroscopy"],
-  },
-]
+import { Skeleton } from "@/components/ui/skeleton"
 
 const defaultFilters: FilterState = {
   priceRange: [0, 2000],
@@ -122,13 +44,45 @@ export default function HomePage() {
   const [bookingHospital, setBookingHospital] = useState<Hospital | null>(null)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
 
+  const [hospitals, setHospitals] = useState<Hospital[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const fetchHospitals = useCallback(async (service: string, location: string, currentFilters: FilterState) => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ service, location, filters: currentFilters }),
+      })
+      if (!response.ok) {
+        throw new Error('Failed to fetch')
+      }
+      const data = await response.json()
+      setHospitals(data)
+    } catch (err) {
+      setError('Could not load hospitals. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchHospitals(searchService, searchLocation, filters)
+  }, [searchService, searchLocation, filters, fetchHospitals])
+
   const handleSearch = (service: string, location: string) => {
-    setSearchService(service || "MRI Scan")
-    setSearchLocation(location || "New York, NY")
+    const newService = service || "MRI Scan"
+    const newLocation = location || "New York, NY"
+    setSearchService(newService)
+    setSearchLocation(newLocation)
+    fetchHospitals(newService, newLocation, filters)
   }
 
   const filteredHospitals = useMemo(() => {
-    let result = sampleHospitals.filter((hospital) => {
+    let result = [...hospitals].filter((hospital) => {
       if (hospital.price < filters.priceRange[0] || hospital.price > filters.priceRange[1]) {
         return false
       }
@@ -329,7 +283,29 @@ export default function HomePage() {
           <div className="flex-1 min-w-0">
             {viewMode === "list" ? (
               <div className="flex flex-col gap-5">
-                {filteredHospitals.length > 0 ? (
+                {isLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex flex-col gap-4 p-4 glass-card premium-border rounded-2xl">
+                      <div className="flex gap-4">
+                        <Skeleton className="h-24 w-24 rounded-xl" />
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-6 w-3/4" />
+                          <Skeleton className="h-4 w-1/2" />
+                          <Skeleton className="h-4 w-full" />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : error ? (
+                  <div className="flex flex-col items-center justify-center rounded-2xl glass-card premium-border py-20 border-destructive/20 bg-destructive/5">
+                    <AlertCircle className="h-12 w-12 text-destructive mb-4" />
+                    <h3 className="text-xl font-semibold text-foreground mb-2">Error</h3>
+                    <p className="text-muted-foreground text-center max-w-md mb-6">{error}</p>
+                    <Button onClick={() => fetchHospitals(searchService, searchLocation, filters)} variant="default">
+                      Try Again
+                    </Button>
+                  </div>
+                ) : filteredHospitals.length > 0 ? (
                   filteredHospitals.map((hospital, index) => (
                     <div 
                       key={hospital.id} 

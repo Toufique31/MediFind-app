@@ -19,6 +19,8 @@ export interface Hospital {
   services: string[]
   imageUrl?: string
   verified?: boolean
+  lat?: number | string
+  lon?: number | string
 }
 
 interface HospitalCardProps {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import {
@@ -23,89 +23,56 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-// Sample data
-const hospitalData = {
-  id: "1",
-  name: "Metropolitan Medical Center",
-  address: "123 Healthcare Blvd, Manhattan, New York, NY 10001",
-  distance: 1.2,
-  rating: 4.8,
-  reviewCount: 324,
-  phone: "+1 (212) 555-0123",
-  email: "info@metropolitanmedical.com",
-  website: "www.metropolitanmedical.com",
-  verified: true,
-  description:
-    "Metropolitan Medical Center is a leading healthcare facility providing comprehensive diagnostic and treatment services. With state-of-the-art equipment and experienced medical professionals, we ensure the highest quality of care for all our patients.",
-  hours: {
-    weekdays: "8:00 AM - 8:00 PM",
-    saturday: "9:00 AM - 5:00 PM",
-    sunday: "10:00 AM - 4:00 PM",
-  },
-  services: [
-    { name: "MRI Scan", price: 450, originalPrice: 550, duration: "45 min" },
-    { name: "CT Scan", price: 380, duration: "30 min" },
-    { name: "X-Ray", price: 120, duration: "15 min" },
-    { name: "Ultrasound", price: 200, duration: "30 min" },
-    { name: "Blood Test", price: 80, duration: "15 min" },
-    { name: "ECG", price: 150, duration: "20 min" },
-    { name: "Mammography", price: 280, duration: "30 min" },
-    { name: "Bone Density Scan", price: 320, duration: "30 min" },
-  ],
-  reviews: [
-    {
-      id: "r1",
-      author: "Sarah M.",
-      avatar: null,
-      rating: 5,
-      date: "2 days ago",
-      comment:
-        "Excellent service! The staff was very professional and the facility is clean and modern. My MRI results came back quickly.",
-    },
-    {
-      id: "r2",
-      author: "James L.",
-      avatar: null,
-      rating: 4,
-      date: "1 week ago",
-      comment:
-        "Good experience overall. Wait time was reasonable and the technicians were knowledgeable. Would recommend.",
-    },
-    {
-      id: "r3",
-      author: "Emily R.",
-      avatar: null,
-      rating: 5,
-      date: "2 weeks ago",
-      comment:
-        "The booking process was seamless and the staff made me feel comfortable during my scan. Very happy with the service.",
-    },
-  ],
-  insurances: ["Aetna", "Blue Cross Blue Shield", "Cigna", "United Healthcare", "Humana"],
-}
-
-const timeSlots = [
-  { time: "9:00 AM", available: true },
-  { time: "9:30 AM", available: true },
-  { time: "10:00 AM", available: false },
-  { time: "10:30 AM", available: true },
-  { time: "11:00 AM", available: true },
-  { time: "11:30 AM", available: false },
-  { time: "2:00 PM", available: true },
-  { time: "2:30 PM", available: true },
-  { time: "3:00 PM", available: true },
-  { time: "3:30 PM", available: false },
-  { time: "4:00 PM", available: true },
-  { time: "4:30 PM", available: true },
-]
-
 export default function HospitalDetailPage() {
   const params = useParams()
-  const [selectedService, setSelectedService] = useState(hospitalData.services[0])
+  const id = params.id as string
+
+  const [hospital, setHospital] = useState<any>(null)
+  const [slots, setSlots] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  const [selectedService, setSelectedService] = useState<any>(null)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
   const [bookingOpen, setBookingOpen] = useState(false)
   const [currentDateIndex, setCurrentDateIndex] = useState(0)
+
+  useEffect(() => {
+    fetch(`/api/hospitals/${id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setHospital(data)
+        if (data?.services && data.services.length > 0) {
+          setSelectedService(data.services[0])
+        }
+        setIsLoading(false)
+      })
+      .catch((err) => {
+        console.error("Failed to fetch hospital:", err)
+        setIsLoading(false)
+      })
+  }, [id])
+
+  useEffect(() => {
+    if (selectedDate && selectedService) {
+      const year = selectedDate.getFullYear()
+      const month = String(selectedDate.getMonth() + 1).padStart(2, "0")
+      const day = String(selectedDate.getDate()).padStart(2, "0")
+      const dateString = `${year}-${month}-${day}`
+
+      fetch(`/api/hospitals/${id}/slots?service=${selectedService.name}&date=${dateString}`)
+        .then((res) => res.json())
+        .then((data) => {
+          setSlots(Array.isArray(data) ? data : [])
+        })
+        .catch((err) => {
+          console.error("Failed to fetch slots:", err)
+          setSlots([])
+        })
+    } else {
+      setSlots([])
+    }
+  }, [selectedDate, selectedService, id])
 
   // Generate next 7 days
   const dates = Array.from({ length: 7 }, (_, i) => {
@@ -122,19 +89,52 @@ export default function HospitalDetailPage() {
     return date.toLocaleDateString("en-US", { weekday: "short" })
   }
 
-  const hospital = {
-    id: hospitalData.id,
-    name: hospitalData.name,
-    address: hospitalData.address,
-    distance: hospitalData.distance,
-    rating: hospitalData.rating,
-    reviewCount: hospitalData.reviewCount,
-    price: selectedService.price,
-    originalPrice: selectedService.originalPrice,
+  const hospitalObj = {
+    id: hospital?.id,
+    name: hospital?.name,
+    address: hospital?.address,
+    distance: hospital?.distance,
+    rating: hospital?.rating,
+    reviewCount: hospital?.reviews?.length || 0,
+    price: selectedService?.price,
+    originalPrice: selectedService?.originalPrice,
     availableToday: true,
     nextSlot: "10:30 AM",
-    services: hospitalData.services.map((s) => s.name),
-    verified: hospitalData.verified,
+    services: hospital?.services?.map((s: any) => s.name) || [],
+    verified: hospital?.verified,
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="mx-auto max-w-7xl px-4 py-6 lg:px-6">
+          <div className="animate-pulse space-y-6">
+            <div className="h-4 w-32 bg-muted rounded"></div>
+            <div className="grid gap-6 lg:grid-cols-3">
+              <div className="lg:col-span-2 space-y-6">
+                <div className="h-64 bg-muted rounded-xl"></div>
+                <div className="h-96 bg-muted rounded-xl"></div>
+              </div>
+              <div className="lg:col-span-1">
+                <div className="h-96 bg-muted rounded-xl"></div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+  if (!hospital || hospital.error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="mx-auto max-w-7xl px-4 py-6 lg:px-6 flex items-center justify-center min-h-[50vh]">
+          <p className="text-muted-foreground text-lg">Hospital not found</p>
+        </main>
+      </div>
+    )
   }
 
   return (
@@ -161,7 +161,7 @@ export default function HospitalDetailPage() {
                 <div className="relative h-40 sm:h-32 sm:w-32 flex-shrink-0 overflow-hidden rounded-xl bg-muted">
                   <div className="absolute inset-0 flex items-center justify-center bg-primary/5">
                     <div className="text-5xl font-bold text-primary/20">
-                      {hospitalData.name.charAt(0)}
+                      {hospital?.name?.charAt(0)}
                     </div>
                   </div>
                 </div>
@@ -171,8 +171,8 @@ export default function HospitalDetailPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <div className="flex items-center gap-2">
-                        <h1 className="text-2xl font-bold text-foreground">{hospitalData.name}</h1>
-                        {hospitalData.verified && (
+                        <h1 className="text-2xl font-bold text-foreground">{hospital?.name}</h1>
+                        {hospital?.verified && (
                           <Badge className="bg-accent text-accent-foreground gap-1">
                             <CheckCircle className="h-3 w-3" /> Verified
                           </Badge>
@@ -180,45 +180,53 @@ export default function HospitalDetailPage() {
                       </div>
                       <div className="flex items-center gap-1 text-muted-foreground mt-2">
                         <MapPin className="h-4 w-4 flex-shrink-0" />
-                        <span>{hospitalData.address}</span>
+                        <span>{hospital?.address}</span>
                       </div>
                     </div>
                     <div className="flex items-center gap-1 rounded-lg bg-amber-50 px-3 py-1.5">
                       <Star className="h-5 w-5 fill-amber-400 text-amber-400" />
-                      <span className="text-lg font-semibold text-amber-700">{hospitalData.rating}</span>
-                      <span className="text-sm text-amber-600">({hospitalData.reviewCount})</span>
+                      <span className="text-lg font-semibold text-amber-700">{hospital?.rating || "N/A"}</span>
+                      {hospital?.reviews && (
+                        <span className="text-sm text-amber-600">({hospital?.reviews?.length || 0})</span>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex flex-wrap gap-4 mt-4 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-1">
-                      <Clock className="h-4 w-4" />
-                      <span>Open: {hospitalData.hours.weekdays}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Phone className="h-4 w-4" />
-                      <span>{hospitalData.phone}</span>
-                    </div>
+                    {hospital?.hours?.weekdays && (
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        <span>Open: {hospital.hours.weekdays}</span>
+                      </div>
+                    )}
+                    {hospital?.phone && (
+                      <div className="flex items-center gap-1">
+                        <Phone className="h-4 w-4" />
+                        <span>{hospital.phone}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
 
-              <p className="mt-4 text-muted-foreground">{hospitalData.description}</p>
+              <p className="mt-4 text-muted-foreground">{hospital?.description}</p>
 
               {/* Insurance */}
-              <div className="mt-4 pt-4 border-t border-border">
-                <div className="flex items-center gap-2 mb-2">
-                  <Shield className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium text-foreground">Accepted Insurance</span>
+              {hospital?.insurances && hospital.insurances.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Shield className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium text-foreground">Accepted Insurance</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {hospital.insurances.map((insurance: string) => (
+                      <Badge key={insurance} variant="secondary" className="text-xs">
+                        {insurance}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {hospitalData.insurances.map((insurance) => (
-                    <Badge key={insurance} variant="secondary" className="text-xs">
-                      {insurance}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Tabs Section */}
@@ -234,25 +242,29 @@ export default function HospitalDetailPage() {
                   value="reviews"
                   className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3"
                 >
-                  Reviews ({hospitalData.reviewCount})
+                  Reviews ({hospital?.reviews?.length || 0})
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="services" className="p-6">
                 <div className="space-y-3">
-                  {hospitalData.services.map((service) => (
+                  {hospital?.services?.map((service: any) => (
                     <button
                       key={service.name}
-                      onClick={() => setSelectedService(service)}
+                      onClick={() => {
+                        setSelectedService(service);
+                        setSelectedTime(null);
+                        setSlots([]);
+                      }}
                       className={`w-full flex items-center justify-between rounded-lg border p-4 transition-colors text-left ${
-                        selectedService.name === service.name
+                        selectedService?.name === service.name
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50"
                       }`}
                     >
                       <div>
                         <h4 className="font-medium text-foreground">{service.name}</h4>
-                        <p className="text-sm text-muted-foreground">Duration: {service.duration}</p>
+                        <p className="text-sm text-muted-foreground">Duration: {service.duration || "N/A"}</p>
                       </div>
                       <div className="text-right">
                         <div className="flex items-baseline gap-2">
@@ -266,18 +278,21 @@ export default function HospitalDetailPage() {
                       </div>
                     </button>
                   ))}
+                  {(!hospital?.services || hospital.services.length === 0) && (
+                    <p className="text-muted-foreground text-center py-4">No services available</p>
+                  )}
                 </div>
               </TabsContent>
 
               <TabsContent value="reviews" className="p-6">
                 <div className="space-y-6">
-                  {hospitalData.reviews.map((review) => (
+                  {hospital?.reviews?.map((review: any) => (
                     <div key={review.id} className="border-b border-border pb-6 last:border-0 last:pb-0">
                       <div className="flex items-start gap-3">
                         <Avatar className="h-10 w-10">
                           <AvatarImage src={review.avatar || undefined} />
                           <AvatarFallback className="bg-primary/10 text-primary">
-                            {review.author.charAt(0)}
+                            {review.author?.charAt(0) || "U"}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
@@ -290,7 +305,7 @@ export default function HospitalDetailPage() {
                                     <Star
                                       key={i}
                                       className={`h-4 w-4 ${
-                                        i < review.rating
+                                        i < (review.rating || 0)
                                           ? "fill-amber-400 text-amber-400"
                                           : "fill-muted text-muted"
                                       }`}
@@ -306,6 +321,9 @@ export default function HospitalDetailPage() {
                       </div>
                     </div>
                   ))}
+                  {(!hospital?.reviews || hospital.reviews.length === 0) && (
+                    <p className="text-muted-foreground text-center py-4">No reviews yet</p>
+                  )}
                 </div>
               </TabsContent>
             </Tabs>
@@ -315,9 +333,13 @@ export default function HospitalDetailPage() {
           <div className="lg:col-span-1">
             <div className="sticky top-24 rounded-xl border border-border bg-card p-6">
               <h3 className="text-lg font-semibold text-foreground mb-1">Book Appointment</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                {selectedService.name} - ${selectedService.price}
-              </p>
+              {selectedService ? (
+                <p className="text-sm text-muted-foreground mb-4">
+                  {selectedService.name} - ${selectedService.price}
+                </p>
+              ) : (
+                <p className="text-sm text-muted-foreground mb-4">Please select a service</p>
+              )}
 
               {/* Date Selection */}
               <div className="mb-4">
@@ -348,7 +370,10 @@ export default function HospitalDetailPage() {
                   {dates.slice(currentDateIndex, currentDateIndex + 4).map((date) => (
                     <button
                       key={date.toISOString()}
-                      onClick={() => setSelectedDate(date)}
+                      onClick={() => {
+                        setSelectedDate(date)
+                        setSelectedTime(null) // Reset time when date changes
+                      }}
                       className={`flex flex-col items-center rounded-lg border p-2 transition-colors ${
                         selectedDate?.toDateString() === date.toDateString()
                           ? "border-primary bg-primary/10 text-primary"
@@ -370,22 +395,24 @@ export default function HospitalDetailPage() {
                 <div className="mb-6">
                   <span className="text-sm font-medium text-foreground mb-3 block">Select Time</span>
                   <div className="grid grid-cols-3 gap-2">
-                    {timeSlots.map((slot) => (
+                    {slots.map((timeString) => (
                       <button
-                        key={slot.time}
-                        onClick={() => slot.available && setSelectedTime(slot.time)}
-                        disabled={!slot.available}
+                        key={timeString}
+                        onClick={() => setSelectedTime(timeString)}
                         className={`rounded-lg border px-2 py-2 text-sm transition-colors ${
-                          !slot.available
-                            ? "border-border bg-muted text-muted-foreground cursor-not-allowed"
-                            : selectedTime === slot.time
+                           selectedTime === timeString
                             ? "border-primary bg-primary/10 text-primary"
                             : "border-border hover:border-primary/50"
                         }`}
                       >
-                        {slot.time}
+                        {timeString}
                       </button>
                     ))}
+                    {slots.length === 0 && (
+                      <p className="col-span-3 text-sm text-center text-muted-foreground py-2 border rounded-lg border-dashed">
+                        No available slots
+                      </p>
+                    )}
                   </div>
                 </div>
               )}
@@ -393,14 +420,18 @@ export default function HospitalDetailPage() {
               {/* Summary */}
               <div className="rounded-lg bg-muted p-4 mb-4">
                 <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Service</span>
-                    <span className="text-foreground">{selectedService.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Duration</span>
-                    <span className="text-foreground">{selectedService.duration}</span>
-                  </div>
+                  {selectedService && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Service</span>
+                        <span className="text-foreground">{selectedService.name}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Duration</span>
+                        <span className="text-foreground">{selectedService.duration || "N/A"}</span>
+                      </div>
+                    </>
+                  )}
                   {selectedDate && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Date</span>
@@ -413,10 +444,12 @@ export default function HospitalDetailPage() {
                       <span className="text-foreground">{selectedTime}</span>
                     </div>
                   )}
-                  <div className="flex justify-between pt-2 border-t border-border">
-                    <span className="font-medium text-foreground">Total</span>
-                    <span className="font-bold text-primary">${selectedService.price}</span>
-                  </div>
+                  {selectedService && (
+                    <div className="flex justify-between pt-2 border-t border-border">
+                      <span className="font-medium text-foreground">Total</span>
+                      <span className="font-bold text-primary">${selectedService.price}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -424,7 +457,7 @@ export default function HospitalDetailPage() {
                 className="w-full"
                 size="lg"
                 onClick={() => setBookingOpen(true)}
-                disabled={!selectedDate || !selectedTime}
+                disabled={!selectedDate || !selectedTime || !selectedService}
               >
                 Book Now
               </Button>
@@ -434,12 +467,14 @@ export default function HospitalDetailPage() {
       </main>
 
       {/* Booking Modal */}
-      <BookingModal
-        hospital={hospital}
-        service={selectedService.name}
-        isOpen={bookingOpen}
-        onClose={() => setBookingOpen(false)}
-      />
+      {selectedService && (
+        <BookingModal
+          hospital={hospitalObj}
+          service={selectedService.name}
+          isOpen={bookingOpen}
+          onClose={() => setBookingOpen(false)}
+        />
+      )}
     </div>
   )
 }

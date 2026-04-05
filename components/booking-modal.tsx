@@ -36,6 +36,9 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
   const [patientName, setPatientName] = useState("")
   const [patientEmail, setPatientEmail] = useState("")
   const [patientPhone, setPatientPhone] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [bookingId, setBookingId] = useState<string | null>(null)
+  const [bookingError, setBookingError] = useState<string | null>(null)
 
   if (!isOpen) return null
 
@@ -74,8 +77,36 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
     })
   }
 
-  const handleConfirm = () => {
-    setStep(4)
+  const handleConfirm = async () => {
+    setIsSubmitting(true)
+    setBookingError(null)
+    try {
+      const res = await fetch("/api/bookings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hospitalId: hospital.id,
+          serviceName: service,
+          date: selectedDate!.toISOString().split("T")[0],
+          time: selectedTime,
+          patientName,
+          patientEmail,
+          patientPhone,
+          price: hospital.price,
+        }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        setBookingId(data.bookingId)
+        setStep(4)
+      } else {
+        setBookingError("Booking failed. Please try again.")
+      }
+    } catch {
+      setBookingError("Booking failed. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const renderStepIndicator = () => (
@@ -310,20 +341,27 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
                 </div>
               </div>
 
+              {bookingError && (
+                <div className="mt-4 rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-600">
+                  {bookingError}
+                </div>
+              )}
+
               <div className="mt-6 flex justify-between">
                 <Button 
                   variant="outline" 
                   onClick={() => setStep(2)}
+                  disabled={isSubmitting}
                   className="rounded-xl border-border/80 hover:border-primary/30"
                 >
                   Back
                 </Button>
                 <Button
                   onClick={handleConfirm}
-                  disabled={!patientName || !patientEmail || !patientPhone}
+                  disabled={!patientName || !patientEmail || !patientPhone || isSubmitting}
                   className="rounded-xl bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300 px-8"
                 >
-                  Confirm Booking
+                  {isSubmitting ? "Processing..." : "Confirm Booking"}
                 </Button>
               </div>
             </div>
@@ -358,7 +396,7 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
                   </div>
                   <div className="flex justify-between pt-3 border-t border-border/50">
                     <span className="text-muted-foreground">Booking ID</span>
-                    <span className="text-foreground font-mono bg-muted px-2 py-0.5 rounded-md">MF-{Date.now().toString().slice(-8)}</span>
+                    <span className="text-foreground font-mono bg-muted px-2 py-0.5 rounded-md">{bookingId}</span>
                   </div>
                 </div>
               </div>

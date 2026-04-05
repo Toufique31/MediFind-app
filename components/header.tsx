@@ -22,25 +22,59 @@ export function Header({ onSearch }: HeaderProps) {
   const [service, setService] = useState("")
   const [location, setLocation] = useState("")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [locationError, setLocationError] = useState("")
 
   const handleSearch = () => {
     onSearch?.(service, location)
   }
 
   const handleDetectLocation = () => {
-    setLocation("Detecting...")
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        () => {
-          setLocation("New York, NY")
-        },
-        () => {
-          setLocation("New York, NY")
-        }
-      )
-    } else {
-      setLocation("New York, NY")
+    setLocation("Detecting your location...")
+    setLocationError("")
+
+    if (!navigator.geolocation) {
+      setLocation("")
+      setLocationError("Could not detect location. Please type it manually.")
+      return
     }
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        try {
+          const lat = position.coords.latitude
+          const lon = position.coords.longitude
+          const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY
+
+          const response = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lon}&key=${apiKey}`
+          )
+          const data = await response.json()
+
+          let city = ""
+          if (data.results && data.results.length > 0) {
+            for (const component of data.results[0].address_components) {
+              if (component.types.includes("locality")) {
+                city = component.long_name
+                break
+              }
+            }
+          }
+
+          if (city) {
+            setLocation(city)
+          } else {
+            throw new Error("City not found in response")
+          }
+        } catch (error) {
+          setLocation("")
+          setLocationError("Could not detect location. Please type it manually.")
+        }
+      },
+      () => {
+        setLocation("")
+        setLocationError("Could not detect location. Please type it manually.")
+      }
+    )
   }
 
   return (
@@ -77,7 +111,10 @@ export function Header({ onSearch }: HeaderProps) {
               placeholder="Location"
               className="h-12 pl-11 pr-20 bg-secondary/50 border-transparent rounded-xl transition-all duration-300 focus:bg-card focus:border-primary/20 focus:shadow-lg focus:shadow-primary/5"
               value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              onChange={(e) => {
+                setLocation(e.target.value)
+                if (locationError) setLocationError("")
+              }}
             />
             <Button
               variant="ghost"
@@ -87,6 +124,11 @@ export function Header({ onSearch }: HeaderProps) {
             >
               Detect
             </Button>
+            {locationError && (
+              <span className="absolute top-[calc(100%+4px)] left-2 text-[11px] text-red-500 whitespace-nowrap">
+                {locationError}
+              </span>
+            )}
           </div>
           <Button 
             onClick={handleSearch} 
@@ -161,8 +203,16 @@ export function Header({ onSearch }: HeaderProps) {
                 placeholder="Location"
                 className="h-12 pl-11 bg-secondary/50 border-transparent rounded-xl"
                 value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                onChange={(e) => {
+                  setLocation(e.target.value)
+                  if (locationError) setLocationError("")
+                }}
               />
+              {locationError && (
+                <span className="absolute top-[calc(100%+4px)] left-2 text-[11px] text-red-500">
+                  {locationError}
+                </span>
+              )}
             </div>
             <Button onClick={handleSearch} className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20">
               Search

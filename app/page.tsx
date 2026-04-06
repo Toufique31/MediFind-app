@@ -27,7 +27,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 
 const defaultFilters: FilterState = {
-  priceRange: [0, 2000],
+  priceRange: [0, 10000],
   rating: 0,
   distance: 50,
   availableToday: false,
@@ -120,7 +120,7 @@ export default function HomePage() {
 
   const activeFilterCount = useMemo(() => {
     let count = 0
-    if (filters.priceRange[0] > 0 || filters.priceRange[1] < 2000) count++
+    if (filters.priceRange[0] > 0 || filters.priceRange[1] < 10000) count++
     if (filters.rating > 0) count++
     if (filters.distance < 50) count++
     if (filters.availableToday) count++

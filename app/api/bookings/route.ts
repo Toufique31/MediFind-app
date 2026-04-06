@@ -20,18 +20,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing required booking fields' }, { status: 400 });
     }
 
-    // 2. Find the matching slot in 'availabilitySlots'
-    const slotsSnapshot = await db
-      .collection('availabilitySlots')
-      .where('hospitalId', '==', hospitalId)
-      .where('serviceName', '==', serviceName)
+    // 2. Find the matching service document
+    const servicesSnapshot = await db.collection('hospitals').doc(hospitalId).collection('services').where('name', '==', serviceName).limit(1).get();
+    
+    if (servicesSnapshot.empty) {
+      return NextResponse.json({ error: 'Service not found' }, { status: 404 });
+    }
+
+    const slotsSnapshot = await servicesSnapshot.docs[0].ref
+      .collection('slots')
       .where('date', '==', date)
       .where('time', '==', time)
-      .where('isBooked', '==', false)
-      .limit(1)
       .get();
 
-    if (slotsSnapshot.empty) {
+    const availableSlot = slotsSnapshot.docs.find(doc => doc.data().isBooked === false);
+
+    if (!availableSlot) {
       return NextResponse.json({ error: 'Slot not available' }, { status: 409 });
     }
 
@@ -39,8 +43,7 @@ export async function POST(req: Request) {
     const batch = db.batch();
 
     // The slot document reference
-    const slotDocId = slotsSnapshot.docs[0].id;
-    const slotRef = db.collection('availabilitySlots').doc(slotDocId);
+    const slotRef = availableSlot.ref;
 
     // Update slot
     batch.update(slotRef, { isBooked: true });

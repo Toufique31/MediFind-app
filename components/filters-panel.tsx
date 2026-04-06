@@ -79,7 +79,7 @@ export function FiltersPanel({ filters, onFiltersChange, onClear, className }: F
           <Slider
             value={filters.priceRange}
             min={0}
-            max={2000}
+            max={10000}
             step={50}
             onValueChange={(value) => updateFilter("priceRange", value as [number, number])}
             className="mb-4"

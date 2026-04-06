@@ -20,17 +20,22 @@ export async function GET(
       );
     }
 
-    // 1. Query 'availabilitySlots' collection
-    const slotsSnapshot = await db
-      .collection('availabilitySlots')
-      .where('hospitalId', '==', id)
-      .where('serviceName', '==', service)
+    // 1. Find the service
+    const servicesSnapshot = await db.collection('hospitals').doc(id).collection('services').where('name', '==', service).limit(1).get();
+    if (servicesSnapshot.empty) {
+      return NextResponse.json([], { status: 200 });
+    }
+
+    // 2. Query its slots by date
+    const slotsSnapshot = await servicesSnapshot.docs[0].ref
+      .collection('slots')
       .where('date', '==', date)
-      .where('isBooked', '==', false)
       .get();
 
-    // 2. Return array of time strings
-    const times = slotsSnapshot.docs.map(doc => doc.data().time as string);
+    // 3. Return array of time strings for unbooked slots
+    const times = slotsSnapshot.docs
+      .filter(doc => doc.data().isBooked === false)
+      .map(doc => doc.data().time as string);
 
     return NextResponse.json(times, { status: 200 });
 

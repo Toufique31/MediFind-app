@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { Search, MapPin, Menu, X, Sparkles } from "lucide-react"
+import { Search, MapPin, Menu, X, Sparkles, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { useAuth } from "@/lib/auth-context"
 
 interface HeaderProps {
   onSearch?: (service: string, location: string) => void
@@ -23,6 +24,7 @@ export function Header({ onSearch }: HeaderProps) {
   const [location, setLocation] = useState("")
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [locationError, setLocationError] = useState("")
+  const { user, loading, logout } = useAuth()
 
   const handleSearch = () => {
     onSearch?.(service, location)
@@ -152,23 +154,34 @@ export function Header({ onSearch }: HeaderProps) {
           >
             Hospitals
           </Link>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-10 w-10 rounded-full p-0 transition-all duration-200 hover:ring-2 hover:ring-primary/20 hover:ring-offset-2">
-                <Avatar className="h-10 w-10 ring-2 ring-border">
-                  <AvatarImage src="/placeholder-avatar.jpg" alt="User" />
-                  <AvatarFallback className="bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-medium">JD</AvatarFallback>
-                </Avatar>
+          {loading ? (
+            <div className="h-10 w-10 rounded-full bg-muted animate-pulse" />
+          ) : user ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="h-10 w-10 rounded-full p-0 transition-all duration-200 hover:ring-2 hover:ring-primary/20 hover:ring-offset-2">
+                  <Avatar className="h-10 w-10 ring-2 ring-border">
+                    <AvatarFallback className="bg-gradient-to-br from-primary/20 to-accent/20 text-primary font-medium">
+                      {user.displayName ? user.displayName[0].toUpperCase() : user.email ? user.email[0].toUpperCase() : "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 glass-card rounded-xl p-2">
+                <DropdownMenuItem className="rounded-lg cursor-pointer transition-colors">My Profile</DropdownMenuItem>
+                <DropdownMenuItem className="rounded-lg cursor-pointer transition-colors">My Bookings</DropdownMenuItem>
+                <DropdownMenuItem className="rounded-lg cursor-pointer transition-colors">Settings</DropdownMenuItem>
+                <DropdownMenuSeparator className="my-2" />
+                <DropdownMenuItem onClick={logout} className="rounded-lg cursor-pointer transition-colors text-destructive">Sign Out</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Link href="/login">
+              <Button variant="outline" className="rounded-xl border-primary/20 hover:bg-primary/5 transition-all text-primary border-2">
+                Sign In
               </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52 glass-card rounded-xl p-2">
-              <DropdownMenuItem className="rounded-lg cursor-pointer transition-colors">My Profile</DropdownMenuItem>
-              <DropdownMenuItem className="rounded-lg cursor-pointer transition-colors">My Bookings</DropdownMenuItem>
-              <DropdownMenuItem className="rounded-lg cursor-pointer transition-colors">Settings</DropdownMenuItem>
-              <DropdownMenuSeparator className="my-2" />
-              <DropdownMenuItem className="rounded-lg cursor-pointer transition-colors text-destructive">Sign Out</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+            </Link>
+          )}
         </nav>
 
         {/* Mobile Menu Button */}
@@ -224,12 +237,23 @@ export function Header({ onSearch }: HeaderProps) {
               <Link href="#" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
                 Hospitals
               </Link>
-              <Link href="#" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
-                My Bookings
-              </Link>
-              <Link href="#" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
-                Settings
-              </Link>
+              {user ? (
+                <>
+                  <Link href="#" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
+                    My Bookings
+                  </Link>
+                  <Link href="#" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
+                    Settings
+                  </Link>
+                  <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="text-left py-3 px-4 text-sm font-medium rounded-xl hover:bg-red-500/10 text-destructive transition-colors">
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-primary/10 text-primary transition-colors">
+                  Sign In
+                </Link>
+              )}
             </div>
           </div>
         </div>

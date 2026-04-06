@@ -114,13 +114,12 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
       {[1, 2, 3].map((s) => (
         <div key={s} className="flex items-center">
           <div
-            className={`h-10 w-10 rounded-xl flex items-center justify-center text-sm font-medium transition-all duration-300 ${
-              step > s
+            className={`h-10 w-10 rounded-xl flex items-center justify-center text-sm font-medium transition-all duration-300 ${step > s
                 ? "bg-gradient-to-br from-accent to-accent/80 text-accent-foreground shadow-lg shadow-accent/20"
                 : step === s
-                ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
-                : "bg-muted text-muted-foreground"
-            }`}
+                  ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
+                  : "bg-muted text-muted-foreground"
+              }`}
           >
             {step > s ? <Check className="h-5 w-5" /> : s}
           </div>
@@ -145,9 +144,9 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
             </h2>
             <p className="text-sm text-muted-foreground mt-0.5">{hospital.name}</p>
           </div>
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={onClose}
             className="rounded-xl hover:bg-muted transition-all duration-200"
           >
@@ -197,15 +196,14 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
                       key={index}
                       disabled={!date || !isDateSelectable(date)}
                       onClick={() => date && setSelectedDate(date)}
-                      className={`aspect-square rounded-xl text-sm font-medium transition-all duration-200 ${
-                        !date
+                      className={`aspect-square rounded-xl text-sm font-medium transition-all duration-200 ${!date
                           ? ""
                           : !isDateSelectable(date)
-                          ? "text-muted-foreground/30 cursor-not-allowed"
-                          : selectedDate?.toDateString() === date.toDateString()
-                          ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
-                          : "hover:bg-muted text-foreground hover:scale-105"
-                      }`}
+                            ? "text-muted-foreground/30 cursor-not-allowed"
+                            : selectedDate?.toDateString() === date.toDateString()
+                              ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
+                              : "hover:bg-muted text-foreground hover:scale-105"
+                        }`}
                     >
                       {date?.getDate()}
                     </button>
@@ -214,8 +212,8 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
               </div>
 
               <div className="mt-6 flex justify-end">
-                <Button 
-                  onClick={() => setStep(2)} 
+                <Button
+                  onClick={() => setStep(2)}
                   disabled={!selectedDate}
                   className="rounded-xl bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300 px-8"
                 >
@@ -243,11 +241,10 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
                   <button
                     key={time}
                     onClick={() => setSelectedTime(time)}
-                    className={`rounded-xl px-3 py-3.5 text-sm font-medium transition-all duration-200 ${
-                      selectedTime === time
+                    className={`rounded-xl px-3 py-3.5 text-sm font-medium transition-all duration-200 ${selectedTime === time
                         ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
                         : "glass-card premium-border hover:border-primary/30 text-foreground hover:scale-[1.02]"
-                    }`}
+                      }`}
                   >
                     {time}
                   </button>
@@ -255,15 +252,15 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
               </div>
 
               <div className="mt-6 flex justify-between">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setStep(1)}
                   className="rounded-xl border-border/80 hover:border-primary/30"
                 >
                   Back
                 </Button>
-                <Button 
-                  onClick={() => setStep(3)} 
+                <Button
+                  onClick={() => setStep(3)}
                   disabled={!selectedTime}
                   className="rounded-xl bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300 px-8"
                 >
@@ -348,8 +345,8 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
               )}
 
               <div className="mt-6 flex justify-between">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setStep(2)}
                   disabled={isSubmitting}
                   className="rounded-xl border-border/80 hover:border-primary/30"
@@ -401,8 +398,8 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
                 </div>
               </div>
 
-              <Button 
-                onClick={onClose} 
+              <Button
+                onClick={onClose}
                 className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary/90 shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300"
               >
                 Done

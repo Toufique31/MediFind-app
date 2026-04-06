@@ -20,10 +20,11 @@ export async function GET(
     }
     const hospitalData = hospitalDoc.data()!;
 
-    // 2. Fetch all documents from hospitalServices where hospitalId == id
+    // 2. Fetch all documents from services where hospitalId == id
     const servicesSnapshot = await db
-      .collection('hospitalServices')
-      .where('hospitalId', '==', id)
+      .collection('hospitals')
+      .doc(id)
+      .collection('services')
       .get();
     
     const services = servicesSnapshot.docs.map(doc => ({

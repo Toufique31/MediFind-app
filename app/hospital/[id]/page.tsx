@@ -30,27 +30,52 @@ export default function HospitalDetailPage() {
   const [hospital, setHospital] = useState<any>(null)
   const [slots, setSlots] = useState<string[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const [selectedService, setSelectedService] = useState<any>(null)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
   const [bookingOpen, setBookingOpen] = useState(false)
   const [currentDateIndex, setCurrentDateIndex] = useState(0)
+  const [availableToday, setAvailableToday] = useState(false)
+  const [nextSlot, setNextSlot] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`/api/hospitals/${id}`)
-      .then((res) => res.json())
-      .then((data) => {
+    const fetchHospital = async () => {
+      try {
+        setError(null)
+        setHospital(null)
+        setIsLoading(true)
+
+        const res = await fetch(`/api/hospitals/${id}`)
+
+        if (res.status === 404) {
+          setHospital(null)
+          setError(null)
+          return
+        }
+
+        if (!res.ok) {
+          setError("Failed to load hospital data. Please try again.")
+          setHospital(null)
+          return
+        }
+
+        const data = await res.json()
         setHospital(data)
         if (data?.services && data.services.length > 0) {
           setSelectedService(data.services[0])
         }
-        setIsLoading(false)
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error("Failed to fetch hospital:", err)
+        setError("Failed to load hospital data. Please try again.")
+        setHospital(null)
+      } finally {
         setIsLoading(false)
-      })
+      }
+    }
+
+    fetchHospital()
   }, [id])
 
   useEffect(() => {
@@ -73,6 +98,30 @@ export default function HospitalDetailPage() {
       setSlots([])
     }
   }, [selectedDate, selectedService, id])
+
+  useEffect(() => {
+    const fetchSlots = async () => {
+      try {
+        const today = new Date().toISOString().split("T")[0]
+        const res = await fetch(`/api/hospitals/${id}/slots?date=${today}`)
+        const data = await res.json()
+
+        if (Array.isArray(data) && data.length > 0) {
+          setAvailableToday(true)
+          setNextSlot(data[0]) // first available slot
+        } else {
+          setAvailableToday(false)
+          setNextSlot(null)
+        }
+      } catch (error) {
+        console.error("Failed to fetch slots", error)
+        setAvailableToday(false)
+        setNextSlot(null)
+      }
+    }
+
+    fetchSlots()
+  }, [id])
 
   // Generate next 7 days
   const dates = Array.from({ length: 7 }, (_, i) => {
@@ -98,8 +147,8 @@ export default function HospitalDetailPage() {
     reviewCount: hospital?.reviews?.length || 0,
     price: selectedService?.price,
     originalPrice: selectedService?.originalPrice,
-    availableToday: true,
-    nextSlot: "10:30 AM",
+    availableToday,
+    nextSlot: nextSlot || undefined,
     services: hospital?.services?.map((s: any) => s.name) || [],
     verified: hospital?.verified,
   }
@@ -126,7 +175,21 @@ export default function HospitalDetailPage() {
     )
   }
 
-  if (!hospital || hospital.error) {
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <main className="mx-auto max-w-7xl px-4 py-6 lg:px-6 flex flex-col items-center justify-center min-h-[50vh] gap-4">
+          <p className="text-destructive text-lg">{error}</p>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Retry
+          </Button>
+        </main>
+      </div>
+    )
+  }
+
+  if (!hospital) {
     return (
       <div className="min-h-screen bg-background">
         <Header />

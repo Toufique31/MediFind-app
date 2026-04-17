@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from "firebase/auth"
@@ -22,10 +22,11 @@ export default function LoginPage() {
   const { user, loading } = useAuth()
 
   // If already logged in, redirect
-  if (!loading && user) {
-    router.replace("/")
-    return null
-  }
+  useEffect(() => {
+    if (!loading && user) {
+      router.replace("/")
+    }
+  }, [loading, user, router])
 
   const getFriendlyErrorMessage = (errorCode: string) => {
     switch (errorCode) {
@@ -67,7 +68,7 @@ export default function LoginPage() {
     }
   }
 
-  if (loading) {
+  if (loading || user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-secondary via-secondary to-muted">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

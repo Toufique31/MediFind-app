@@ -74,11 +74,8 @@ export default function HomePage() {
   }, [searchService, searchLocation, filters, fetchHospitals])
 
   const handleSearch = (service: string, location: string) => {
-    const newService = service || "MRI Scan"
-    const newLocation = location || "Kolkata"
-    setSearchService(newService)
-    setSearchLocation(newLocation)
-    fetchHospitals(newService, newLocation, filters)
+    setSearchService(service || "MRI Scan")
+    setSearchLocation(location || "Kolkata")
   }
 
   const filteredHospitals = useMemo(() => {

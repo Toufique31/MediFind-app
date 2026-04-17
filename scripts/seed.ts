@@ -25,9 +25,13 @@
 import * as admin from 'firebase-admin';
 
 // ── Firebase Admin initialisation ────────────────────────────────────────────
+if (!process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
+  throw new Error("Missing Firebase Project ID in environment variables");
+}
+
 admin.initializeApp({
   credential: admin.credential.applicationDefault(),
-  projectId: "medifind-web",
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 });
 
 const db = admin.firestore();

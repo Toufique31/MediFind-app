@@ -3,6 +3,22 @@ import { db, admin } from '@/lib/firebase-admin';
 
 export async function POST(req: Request) {
   try {
+    // Verify Firebase ID token from Authorization header
+    const authHeader = req.headers.get('authorization');
+    const token = authHeader?.split('Bearer ')[1];
+    
+    if (!token) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    let verifiedUserId: string;
+    try {
+      const decoded = await admin.auth().verifyIdToken(token);
+      verifiedUserId = decoded.uid;
+    } catch (authError) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     const {
       hospitalId,
@@ -12,8 +28,7 @@ export async function POST(req: Request) {
       patientName,
       patientEmail,
       patientPhone,
-      price,
-      userId
+      price
     } = body;
 
     if (!hospitalId || !serviceName || !date || !time || !patientName || !patientEmail || !patientPhone) {
@@ -39,39 +54,45 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Slot not available' }, { status: 409 });
     }
 
-    // We can use a batch to update both atomically
-    const batch = db.batch();
-
-    // The slot document reference
-    const slotRef = availableSlot.ref;
-
-    // Update slot
-    batch.update(slotRef, { isBooked: true });
-
-    // 1. Create a new document in 'bookings' collection
+    // We will use a transaction to prevent race conditions during booking
     const newBookingRef = db.collection('bookings').doc();
-    batch.set(newBookingRef, {
-      hospitalId,
-      serviceName,
-      date,
-      time,
-      patientName,
-      patientEmail,
-      patientPhone,
-      price: price || 0,
-      userId: userId || null,
-      status: 'confirmed',
-      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    
+    await db.runTransaction(async (tx) => {
+      // 1. Read the slot document within the transaction
+      const slotSnap = await tx.get(availableSlot.ref);
+      
+      // 2. Check if the slot got booked by another request
+      if (slotSnap.data()?.isBooked === true) {
+        throw new Error('SLOT_TAKEN');
+      }
+
+      // 3. If not booked, update slot and create booking
+      tx.update(availableSlot.ref, { isBooked: true });
+      tx.set(newBookingRef, {
+        hospitalId,
+        serviceName,
+        date,
+        time,
+        patientName,
+        patientEmail,
+        patientPhone,
+        price: price || 0,
+        userId: verifiedUserId,
+        status: 'confirmed',
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
     });
 
-    // Commit the batch
-    await batch.commit();
-
-    // 3. Return success
+    // Return success
     return NextResponse.json({ success: true, bookingId: newBookingRef.id }, { status: 201 });
 
   } catch (error: any) {
     console.error('Bookings Route Error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    
+    if (error.message === 'SLOT_TAKEN') {
+      return NextResponse.json({ error: 'Slot already booked' }, { status: 409 });
+    }
+    
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

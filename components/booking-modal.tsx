@@ -1,11 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { X, ChevronLeft, ChevronRight, Check, Calendar, Clock, User, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import type { Hospital } from "./hospital-card"
+import { useAuth } from "@/lib/auth-context"
 
 interface BookingModalProps {
   hospital: Hospital
@@ -14,37 +15,70 @@ interface BookingModalProps {
   onClose: () => void
 }
 
-const timeSlots = [
-  "9:00 AM",
-  "9:30 AM",
-  "10:00 AM",
-  "10:30 AM",
-  "11:00 AM",
-  "11:30 AM",
-  "2:00 PM",
-  "2:30 PM",
-  "3:00 PM",
-  "3:30 PM",
-  "4:00 PM",
-  "4:30 PM",
-]
+
 
 export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }: BookingModalProps) {
+  const { user } = useAuth()
   const [step, setStep] = useState(1)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
   const [selectedTime, setSelectedTime] = useState<string | null>(null)
+  const [availableSlots, setAvailableSlots] = useState<string[]>([])
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false)
   const [patientName, setPatientName] = useState("")
   const [patientEmail, setPatientEmail] = useState("")
   const [patientPhone, setPatientPhone] = useState("")
+
+  // Fetch available slots when date, hospital, or service changes
+  useEffect(() => {
+    if (!selectedDate || !hospital.id || !service) return
+
+    const fetchSlots = async () => {
+      setIsLoadingSlots(true)
+      try {
+        // Format date using local time to avoid UTC conversion issues
+        const year = selectedDate.getFullYear();
+        const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+        const day = String(selectedDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+
+        const res = await fetch(`/api/hospitals/${hospital.id}/slots?service=${encodeURIComponent(service)}&date=${dateStr}`)
+        if (!res.ok) throw new Error("Failed to fetch slots")
+
+        const data = await res.json()
+        setAvailableSlots(Array.isArray(data) ? data : [])
+      } catch (error) {
+        console.error("Error fetching slots:", error)
+        setAvailableSlots([])
+      } finally {
+        setIsLoadingSlots(false)
+      }
+    }
+
+    fetchSlots()
+  }, [selectedDate, hospital.id, service])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [bookingId, setBookingId] = useState<string | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
 
-  if (!isOpen) return null
-
   const today = new Date()
-  const currentMonth = today.getMonth()
-  const currentYear = today.getFullYear()
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth())
+  const [currentYear, setCurrentYear] = useState(today.getFullYear())
+
+  // Reset all booking state when the modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setStep(1)
+      setSelectedDate(null)
+      setSelectedTime(null)
+      setPatientName("")
+      setPatientEmail("")
+      setPatientPhone("")
+      setBookingId(null)
+      setBookingError(null)
+    }
+  }, [isOpen])
+
+  if (!isOpen) return null
 
   const getDaysInMonth = (month: number, year: number) => {
     const date = new Date(year, month, 1)
@@ -78,16 +112,31 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
   }
 
   const handleConfirm = async () => {
+    if (!user) {
+      setBookingError("Please login to book")
+      return
+    }
+
     setIsSubmitting(true)
     setBookingError(null)
     try {
+      // Format date using local time to avoid UTC conversion issues
+      const year = selectedDate!.getFullYear();
+      const month = String(selectedDate!.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate!.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
+      const token = await user.getIdToken()
       const res = await fetch("/api/bookings", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
         body: JSON.stringify({
           hospitalId: hospital.id,
           serviceName: service,
-          date: selectedDate!.toISOString().split("T")[0],
+          date: dateStr,
           time: selectedTime,
           patientName,
           patientEmail,
@@ -115,10 +164,10 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
         <div key={s} className="flex items-center">
           <div
             className={`h-10 w-10 rounded-xl flex items-center justify-center text-sm font-medium transition-all duration-300 ${step > s
-                ? "bg-gradient-to-br from-accent to-accent/80 text-accent-foreground shadow-lg shadow-accent/20"
-                : step === s
-                  ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
-                  : "bg-muted text-muted-foreground"
+              ? "bg-gradient-to-br from-accent to-accent/80 text-accent-foreground shadow-lg shadow-accent/20"
+              : step === s
+                ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
+                : "bg-muted text-muted-foreground"
               }`}
           >
             {step > s ? <Check className="h-5 w-5" /> : s}
@@ -176,10 +225,28 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
                     })}
                   </h4>
                   <div className="flex gap-1.5">
-                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl" disabled>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-xl"
+                      onClick={() => {
+                        const prev = new Date(currentYear, currentMonth - 1, 1)
+                        setCurrentMonth(prev.getMonth())
+                        setCurrentYear(prev.getFullYear())
+                      }}
+                    >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 rounded-xl"
+                      onClick={() => {
+                        const next = new Date(currentYear, currentMonth + 1, 1)
+                        setCurrentMonth(next.getMonth())
+                        setCurrentYear(next.getFullYear())
+                      }}
+                    >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
@@ -197,12 +264,12 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
                       disabled={!date || !isDateSelectable(date)}
                       onClick={() => date && setSelectedDate(date)}
                       className={`aspect-square rounded-xl text-sm font-medium transition-all duration-200 ${!date
-                          ? ""
-                          : !isDateSelectable(date)
-                            ? "text-muted-foreground/30 cursor-not-allowed"
-                            : selectedDate?.toDateString() === date.toDateString()
-                              ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
-                              : "hover:bg-muted text-foreground hover:scale-105"
+                        ? ""
+                        : !isDateSelectable(date)
+                          ? "text-muted-foreground/30 cursor-not-allowed"
+                          : selectedDate?.toDateString() === date.toDateString()
+                            ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
+                            : "hover:bg-muted text-foreground hover:scale-105"
                         }`}
                     >
                       {date?.getDate()}
@@ -236,20 +303,30 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
                 {selectedDate && formatDate(selectedDate)}
               </p>
 
-              <div className="grid grid-cols-3 gap-2.5">
-                {timeSlots.map((time) => (
-                  <button
-                    key={time}
-                    onClick={() => setSelectedTime(time)}
-                    className={`rounded-xl px-3 py-3.5 text-sm font-medium transition-all duration-200 ${selectedTime === time
+              {isLoadingSlots ? (
+                <div className="flex justify-center py-8">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary"></div>
+                </div>
+              ) : availableSlots.length === 0 ? (
+                <div className="text-center py-8 text-sm text-muted-foreground glass-card premium-border rounded-xl">
+                  No slots available for this date.
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2.5">
+                  {availableSlots.map((time) => (
+                    <button
+                      key={time}
+                      onClick={() => setSelectedTime(time)}
+                      className={`rounded-xl px-3 py-3.5 text-sm font-medium transition-all duration-200 ${selectedTime === time
                         ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground shadow-lg shadow-primary/20"
                         : "glass-card premium-border hover:border-primary/30 text-foreground hover:scale-[1.02]"
-                      }`}
-                  >
-                    {time}
-                  </button>
-                ))}
-              </div>
+                        }`}
+                    >
+                      {time}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <div className="mt-6 flex justify-between">
                 <Button

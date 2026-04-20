@@ -132,8 +132,8 @@ export function Header({ onSearch }: HeaderProps) {
               </span>
             )}
           </div>
-          <Button 
-            onClick={handleSearch} 
+          <Button
+            onClick={handleSearch}
             className="h-12 px-8 rounded-xl bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all duration-300 hover:scale-[1.02]"
           >
             Search
@@ -143,13 +143,13 @@ export function Header({ onSearch }: HeaderProps) {
         {/* Desktop Navigation */}
         <nav className="hidden items-center gap-6 lg:flex">
           <Link
-            href="#"
+            href="/search?type=service"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-all duration-200 hover:translate-y-[-1px]"
           >
             Services
           </Link>
           <Link
-            href="#"
+            href="/search?type=hospital"
             className="text-sm font-medium text-muted-foreground hover:text-foreground transition-all duration-200 hover:translate-y-[-1px]"
           >
             Hospitals
@@ -168,9 +168,9 @@ export function Header({ onSearch }: HeaderProps) {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52 glass-card rounded-xl p-2">
-                <DropdownMenuItem className="rounded-lg cursor-pointer transition-colors">My Profile</DropdownMenuItem>
-                <DropdownMenuItem className="rounded-lg cursor-pointer transition-colors">My Bookings</DropdownMenuItem>
-                <DropdownMenuItem className="rounded-lg cursor-pointer transition-colors">Settings</DropdownMenuItem>
+                <Link href="/profile"><DropdownMenuItem className="rounded-lg cursor-pointer transition-colors">My Profile</DropdownMenuItem></Link>
+                <Link href="/bookings"><DropdownMenuItem className="rounded-lg cursor-pointer transition-colors">My Bookings</DropdownMenuItem></Link>
+                <Link href="/settings"><DropdownMenuItem className="rounded-lg cursor-pointer transition-colors">Settings</DropdownMenuItem></Link>
                 <DropdownMenuSeparator className="my-2" />
                 <DropdownMenuItem onClick={logout} className="rounded-lg cursor-pointer transition-colors text-destructive">Sign Out</DropdownMenuItem>
               </DropdownMenuContent>
@@ -231,18 +231,21 @@ export function Header({ onSearch }: HeaderProps) {
               Search
             </Button>
             <div className="mt-4 flex flex-col gap-1 border-t border-border/50 pt-6">
-              <Link href="#" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
+              <Link href="/search?type=service" onClick={() => setMobileMenuOpen(false)} className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
                 Services
               </Link>
-              <Link href="#" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
+              <Link href="/search?type=hospital" onClick={() => setMobileMenuOpen(false)} className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
                 Hospitals
               </Link>
               {user ? (
                 <>
-                  <Link href="#" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
+                  <Link href="/profile" onClick={() => setMobileMenuOpen(false)} className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
+                    My Profile
+                  </Link>
+                  <Link href="/bookings" onClick={() => setMobileMenuOpen(false)} className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
                     My Bookings
                   </Link>
-                  <Link href="#" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
+                  <Link href="/settings" onClick={() => setMobileMenuOpen(false)} className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
                     Settings
                   </Link>
                   <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="text-left py-3 px-4 text-sm font-medium rounded-xl hover:bg-red-500/10 text-destructive transition-colors">

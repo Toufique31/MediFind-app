@@ -37,7 +37,7 @@ const defaultFilters: FilterState = {
 export default function HomePage() {
   const [filters, setFilters] = useState<FilterState>(defaultFilters)
   const [searchService, setSearchService] = useState("MRI Scan")
-  const [searchLocation, setSearchLocation] = useState("New York, NY")
+  const [searchLocation, setSearchLocation] = useState("Kolkata")
   const [sortBy, setSortBy] = useState("relevance")
   const [viewMode, setViewMode] = useState<"list" | "map">("list")
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null)
@@ -74,11 +74,8 @@ export default function HomePage() {
   }, [searchService, searchLocation, filters, fetchHospitals])
 
   const handleSearch = (service: string, location: string) => {
-    const newService = service || "MRI Scan"
-    const newLocation = location || "New York, NY"
-    setSearchService(newService)
-    setSearchLocation(newLocation)
-    fetchHospitals(newService, newLocation, filters)
+    setSearchService(service || "MRI Scan")
+    setSearchLocation(location || "Kolkata")
   }
 
   const filteredHospitals = useMemo(() => {
@@ -116,7 +113,7 @@ export default function HomePage() {
     }
 
     return result
-  }, [filters, sortBy])
+  }, [filters, sortBy, hospitals])
 
   const activeFilterCount = useMemo(() => {
     let count = 0
@@ -307,8 +304,8 @@ export default function HomePage() {
                   </div>
                 ) : filteredHospitals.length > 0 ? (
                   filteredHospitals.map((hospital, index) => (
-                    <div 
-                      key={hospital.id} 
+                    <div
+                      key={hospital.id}
                       className="animate-in-up"
                       style={{ animationDelay: `${index * 50}ms` }}
                     >

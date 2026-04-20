@@ -2,14 +2,14 @@ import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
 
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371; // Radius of the earth in km
+  const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -23,119 +23,173 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing service or location' }, { status: 400 });
     }
 
-    // 1. Get Lat/Lon from Google Maps
+    // 1. Geocode user location
+    if (!process.env.GOOGLE_MAPS_SERVER_KEY) {
+      return NextResponse.json({ error: 'Server configuration error: Missing Maps API key' }, { status: 500 });
+    }
+
     const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(
       location
-    )}&key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY}`;
+    )}&key=${process.env.GOOGLE_MAPS_SERVER_KEY}`;
     const geocodeRes = await fetch(geocodeUrl);
     const geocodeData = await geocodeRes.json();
 
     if (!geocodeData.results || geocodeData.results.length === 0) {
-      // Fallback geocoding due to restricted API key
-      if (location.toLowerCase().includes('kolkata')) {
-        geocodeData.results = [{ geometry: { location: { lat: 22.5726, lng: 88.3639 } } }];
-      } else if (location.toLowerCase().includes('new york')) {
-        geocodeData.results = [{ geometry: { location: { lat: 40.7128, lng: -74.0060 } } }];
-      } else {
-        return NextResponse.json({ error: 'Location not found' }, { status: 404 });
-      }
+      return NextResponse.json({ error: 'Location not found' }, { status: 404 });
     }
 
     const userLat = geocodeData.results[0].geometry.location.lat;
     const userLon = geocodeData.results[0].geometry.location.lng;
 
-    // 2. Fetch all hospitals and iterate
-    const hospitalsSnapshot = await db.collection('hospitals').get();
-    const rawResults: any[] = [];
+    // 2. Query services using collectionGroup to find hospitals offering this service
+    const servicesSnapshot = await db
+      .collectionGroup('services')
+      .where('serviceName', '==', service)
+      .get();
+
+    if (servicesSnapshot.empty) {
+      return NextResponse.json([], { status: 200 });
+    }
+
+    // Extract unique hospital IDs and build service price map
+    const hospitalIdsSet = new Set<string>();
+    const servicePriceMap: Record<string, number> = {};
+
+    for (const serviceDoc of servicesSnapshot.docs) {
+      const hospitalId = serviceDoc.ref.parent.parent?.id;
+      if (hospitalId) {
+        hospitalIdsSet.add(hospitalId);
+        const serviceData = serviceDoc.data();
+        servicePriceMap[hospitalId] = serviceData.price ?? 0;
+      }
+    }
+
+    const hospitalIds = Array.from(hospitalIdsSet);
     const today = new Date().toISOString().split('T')[0];
 
-    for (const hospitalDoc of hospitalsSnapshot.docs) {
-      const hospitalId = hospitalDoc.id;
-      const hospitalData = hospitalDoc.data();
+    // 3. Batch-fetch today's slots across all matching hospitals in one collectionGroup query
+    //    Firestore 'in' supports up to 30 values; chunk if needed
+    const CHUNK_SIZE = 30;
+    const slotsMap: Record<string, { availableToday: boolean; nextSlot?: string }> = {};
 
-      // 3. Fetch all services for this hospital
-      const allServicesSnapshot = await hospitalDoc.ref.collection('services').get();
-      const matchedServiceDoc = allServicesSnapshot.docs.find(doc => doc.data().name === service);
-
-      if (!matchedServiceDoc) continue;
-      
-      const serviceDoc = matchedServiceDoc;
-      const serviceData = serviceDoc.data();
-      const allServices = allServicesSnapshot.docs.map(doc => doc.data().name);
-
-      let hospLat = hospitalData.location ? hospitalData.location._latitude || hospitalData.location.latitude : hospitalData.lat;
-      let hospLon = hospitalData.location ? hospitalData.location._longitude || hospitalData.location.longitude : hospitalData.lon;
-
-      // 4. Calculate Distance
-      const distance = getDistanceFromLatLonInKm(userLat, userLon, hospLat, hospLon);
-
-      // 5. Check slots for 'availableToday' and 'nextSlot'
-      const slotsSnapshot = await serviceDoc.ref
-        .collection('slots')
+    for (let i = 0; i < hospitalIds.length; i += CHUNK_SIZE) {
+      const chunk = hospitalIds.slice(i, i + CHUNK_SIZE);
+      const slotsSnapshot = await db
+        .collectionGroup('slots')
+        .where('hospitalId', 'in', chunk)
         .where('date', '==', today)
         .get();
 
-      const availableSlots = slotsSnapshot.docs
-        .map(doc => doc.data())
-        .filter(slot => slot.isBooked === false);
-        
-      const availableToday = availableSlots.length > 0;
-      const nextSlot = availableToday ? availableSlots[0].time : undefined;
-
-      // 6. Check availableToday if required
-      if (filters?.availableToday && !availableToday) {
-        continue; // skip this one
+      for (const slotDoc of slotsSnapshot.docs) {
+        const slot = slotDoc.data();
+        const hid = slot.hospitalId as string;
+        if (!slotsMap[hid]) {
+          slotsMap[hid] = { availableToday: false };
+        }
+        if (!slot.isBooked) {
+          if (!slotsMap[hid].availableToday) {
+            slotsMap[hid].availableToday = true;
+            slotsMap[hid].nextSlot = slot.time;
+          }
+        }
       }
-
-      rawResults.push({
-        id: hospitalId,
-        ...hospitalData,
-        services: allServices,
-        lat: hospLat,
-        lon: hospLon,
-        price: serviceData.price || serviceData.servicePrice || 0,
-        distance,
-        availableToday,
-        nextSlot
-      });
     }
 
-    // 5. Apply filters (priceRange, minimum rating, max distance)
+    // 4. Fetch hospital documents and build results
+    const rawResults: any[] = [];
+
+    // Fetch hospital documents in chunks
+    for (let i = 0; i < hospitalIds.length; i += CHUNK_SIZE) {
+      const chunk = hospitalIds.slice(i, i + CHUNK_SIZE);
+      const hospitalDocs = await Promise.all(
+        chunk.map((hid) => db.collection('hospitals').doc(hid).get())
+      );
+
+      for (const hospitalDoc of hospitalDocs) {
+        if (!hospitalDoc.exists) continue;
+
+        const hospitalId = hospitalDoc.id;
+        const hospitalData = hospitalDoc.data()!;
+
+        const hospLat = hospitalData.location
+          ? hospitalData.location._latitude ?? hospitalData.location.latitude
+          : hospitalData.lat;
+        const hospLon = hospitalData.location
+          ? hospitalData.location._longitude ?? hospitalData.location.longitude
+          : hospitalData.lon;
+
+        const distance = getDistanceFromLatLonInKm(userLat, userLon, hospLat, hospLon);
+
+        const slotInfo = slotsMap[hospitalId] ?? { availableToday: false };
+
+        if (filters?.availableToday && !slotInfo.availableToday) continue;
+
+        // Use price from service document
+        const price: number = servicePriceMap[hospitalId] ?? 0;
+
+        rawResults.push({
+          id: hospitalId,
+          ...hospitalData,
+          services: hospitalData.serviceNames ?? [],
+          lat: hospLat,
+          lon: hospLon,
+          price,
+          distance,
+          availableToday: slotInfo.availableToday,
+          nextSlot: slotInfo.nextSlot,
+        });
+      }
+    }
+
+    if (rawResults.length === 0) return NextResponse.json([], { status: 200 });
+
+    // 5. Apply filters (priceRange, rating, distance, insurance)
     let filteredResults = rawResults.filter((h) => {
-      let isMatch = true;
-      if (filters?.priceRange) {
-        if (h.price < filters.priceRange[0] || h.price > filters.priceRange[1]) isMatch = false;
+      if (filters?.priceRange && (h.price < filters.priceRange[0] || h.price > filters.priceRange[1])) return false;
+      if (filters?.rating && (h.rating || 0) < filters.rating) return false;
+      if (filters?.distance && h.distance > filters.distance) return false;
+
+      // Insurance filter
+      if (filters?.insurance) {
+        const hospitalInsurances = h.insuranceProviders ?? h.insurances ?? [];
+        if (Array.isArray(filters.insurance)) {
+          // Check if at least one insurance in the filter is accepted by hospital
+          const hasMatch = filters.insurance.some((ins: string) =>
+            hospitalInsurances.includes(ins)
+          );
+          if (!hasMatch) return false;
+        } else {
+          // Single insurance string
+          if (!hospitalInsurances.includes(filters.insurance)) return false;
+        }
       }
-      if (filters?.rating && (h.rating || 0) < filters.rating) {
-        isMatch = false;
-      }
-      if (filters?.distance && h.distance > filters.distance) {
-        isMatch = false;
-      }
-      return isMatch;
+
+      return true;
     });
 
     if (filteredResults.length === 0) return NextResponse.json([], { status: 200 });
 
-    // 7. Compute weighted score
-    const maxPrice = Math.max(...filteredResults.map((h) => h.price), 1);
-    const minPrice = Math.min(...filteredResults.map((h) => h.price), 0);
+    // 6. Compute weighted score and sort
+    const prices = filteredResults.map((h) => h.price);
+    const maxPrice = Math.max(...prices, 1);
+    const minPrice = Math.min(...prices, 0);
     const priceDiff = maxPrice - minPrice;
 
-    filteredResults = filteredResults.map((h) => {
-      const normalizedPrice = priceDiff === 0 ? 0 : (h.price - minPrice) / priceDiff;
-      const normalizedDistance = h.distance === 0 ? 0.01 : h.distance; // prevent div by zero
-      
-      const distanceComponent = (1 / normalizedDistance) * 0.4;
-      const ratingComponent = (h.rating || 0) * 0.4;
-      const priceComponent = normalizedPrice * 0.2;
+    // Normalize distance across all filtered results (0–1 scale)
+    const maxDist = Math.max(...filteredResults.map((h) => h.distance), 1);
 
-      h.score = distanceComponent + ratingComponent - priceComponent;
-      return h;
-    });
-
-    // 8. Sort by score descending
-    filteredResults.sort((a, b) => b.score - a.score);
+    filteredResults = filteredResults
+      .map((h) => {
+        const normalizedPrice = priceDiff === 0 ? 0 : (h.price - minPrice) / priceDiff;
+        const normalizedDist = h.distance / maxDist; // 0 (closest) → 1 (farthest)
+        // Closer hospitals score higher; contributions stay within expected weight ranges
+        h.score =
+          (1 - normalizedDist) * 0.4 +  // distance component (closer = higher)
+          (h.rating || 0) * 0.4 -        // rating component
+          normalizedPrice * 0.2;          // price component (cheaper = higher)
+        return h;
+      })
+      .sort((a, b) => b.score - a.score);
 
     return NextResponse.json(filteredResults, { status: 200 });
   } catch (error: any) {

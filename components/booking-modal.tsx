@@ -35,7 +35,12 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
     const fetchSlots = async () => {
       setIsLoadingSlots(true)
       try {
-        const dateStr = selectedDate.toISOString().split("T")[0]
+        // Format date using local time to avoid UTC conversion issues
+        const year = selectedDate.getFullYear();
+        const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+        const day = String(selectedDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+
         const res = await fetch(`/api/hospitals/${hospital.id}/slots?service=${encodeURIComponent(service)}&date=${dateStr}`)
         if (!res.ok) throw new Error("Failed to fetch slots")
 
@@ -55,6 +60,10 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
   const [bookingId, setBookingId] = useState<string | null>(null)
   const [bookingError, setBookingError] = useState<string | null>(null)
 
+  const today = new Date()
+  const [currentMonth, setCurrentMonth] = useState(today.getMonth())
+  const [currentYear, setCurrentYear] = useState(today.getFullYear())
+
   // Reset all booking state when the modal opens
   useEffect(() => {
     if (isOpen) {
@@ -70,10 +79,6 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
   }, [isOpen])
 
   if (!isOpen) return null
-
-  const today = new Date()
-  const [currentMonth, setCurrentMonth] = useState(today.getMonth())
-  const [currentYear, setCurrentYear] = useState(today.getFullYear())
 
   const getDaysInMonth = (month: number, year: number) => {
     const date = new Date(year, month, 1)
@@ -115,6 +120,12 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
     setIsSubmitting(true)
     setBookingError(null)
     try {
+      // Format date using local time to avoid UTC conversion issues
+      const year = selectedDate!.getFullYear();
+      const month = String(selectedDate!.getMonth() + 1).padStart(2, '0');
+      const day = String(selectedDate!.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
       const token = await user.getIdToken()
       const res = await fetch("/api/bookings", {
         method: "POST",
@@ -125,7 +136,7 @@ export function BookingModal({ hospital, service = "MRI Scan", isOpen, onClose }
         body: JSON.stringify({
           hospitalId: hospital.id,
           serviceName: service,
-          date: selectedDate!.toISOString().split("T")[0],
+          date: dateStr,
           time: selectedTime,
           patientName,
           patientEmail,

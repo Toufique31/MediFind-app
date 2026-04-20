@@ -231,21 +231,21 @@ export function Header({ onSearch }: HeaderProps) {
               Search
             </Button>
             <div className="mt-4 flex flex-col gap-1 border-t border-border/50 pt-6">
-              <Link href="/search?type=service" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
+              <Link href="/search?type=service" onClick={() => setMobileMenuOpen(false)} className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
                 Services
               </Link>
-              <Link href="/search?type=hospital" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
+              <Link href="/search?type=hospital" onClick={() => setMobileMenuOpen(false)} className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
                 Hospitals
               </Link>
               {user ? (
                 <>
-                  <Link href="/profile" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
+                  <Link href="/profile" onClick={() => setMobileMenuOpen(false)} className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
                     My Profile
                   </Link>
-                  <Link href="/bookings" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
+                  <Link href="/bookings" onClick={() => setMobileMenuOpen(false)} className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
                     My Bookings
                   </Link>
-                  <Link href="/settings" className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
+                  <Link href="/settings" onClick={() => setMobileMenuOpen(false)} className="py-3 px-4 text-sm font-medium rounded-xl hover:bg-muted transition-colors">
                     Settings
                   </Link>
                   <button onClick={() => { logout(); setMobileMenuOpen(false); }} className="text-left py-3 px-4 text-sm font-medium rounded-xl hover:bg-red-500/10 text-destructive transition-colors">

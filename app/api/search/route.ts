@@ -41,17 +41,30 @@ export async function POST(req: Request) {
     const userLat = geocodeData.results[0].geometry.location.lat;
     const userLon = geocodeData.results[0].geometry.location.lng;
 
-    // 2. Filter hospitals at DB level — 1 read instead of fetching all
-    const hospitalsSnapshot = await db
-      .collection('hospitals')
-      .where('serviceNames', 'array-contains', service)
+    // 2. Query services using collectionGroup to find hospitals offering this service
+    const servicesSnapshot = await db
+      .collectionGroup('services')
+      .where('serviceName', '==', service)
       .get();
 
-    if (hospitalsSnapshot.empty) {
+    if (servicesSnapshot.empty) {
       return NextResponse.json([], { status: 200 });
     }
 
-    const hospitalIds = hospitalsSnapshot.docs.map((doc) => doc.id);
+    // Extract unique hospital IDs and build service price map
+    const hospitalIdsSet = new Set<string>();
+    const servicePriceMap: Record<string, number> = {};
+
+    for (const serviceDoc of servicesSnapshot.docs) {
+      const hospitalId = serviceDoc.ref.parent.parent?.id;
+      if (hospitalId) {
+        hospitalIdsSet.add(hospitalId);
+        const serviceData = serviceDoc.data();
+        servicePriceMap[hospitalId] = serviceData.price ?? 0;
+      }
+    }
+
+    const hospitalIds = Array.from(hospitalIdsSet);
     const today = new Date().toISOString().split('T')[0];
 
     // 3. Batch-fetch today's slots across all matching hospitals in one collectionGroup query
@@ -82,52 +95,75 @@ export async function POST(req: Request) {
       }
     }
 
-    // 4. Build results from already-fetched hospital docs — no extra reads
+    // 4. Fetch hospital documents and build results
     const rawResults: any[] = [];
 
-    for (const hospitalDoc of hospitalsSnapshot.docs) {
-      const hospitalId = hospitalDoc.id;
-      const hospitalData = hospitalDoc.data();
+    // Fetch hospital documents in chunks
+    for (let i = 0; i < hospitalIds.length; i += CHUNK_SIZE) {
+      const chunk = hospitalIds.slice(i, i + CHUNK_SIZE);
+      const hospitalDocs = await Promise.all(
+        chunk.map((hid) => db.collection('hospitals').doc(hid).get())
+      );
 
-      const hospLat = hospitalData.location
-        ? hospitalData.location._latitude ?? hospitalData.location.latitude
-        : hospitalData.lat;
-      const hospLon = hospitalData.location
-        ? hospitalData.location._longitude ?? hospitalData.location.longitude
-        : hospitalData.lon;
+      for (const hospitalDoc of hospitalDocs) {
+        if (!hospitalDoc.exists) continue;
 
-      const distance = getDistanceFromLatLonInKm(userLat, userLon, hospLat, hospLon);
+        const hospitalId = hospitalDoc.id;
+        const hospitalData = hospitalDoc.data()!;
 
-      const slotInfo = slotsMap[hospitalId] ?? { availableToday: false };
+        const hospLat = hospitalData.location
+          ? hospitalData.location._latitude ?? hospitalData.location.latitude
+          : hospitalData.lat;
+        const hospLon = hospitalData.location
+          ? hospitalData.location._longitude ?? hospitalData.location.longitude
+          : hospitalData.lon;
 
-      if (filters?.availableToday && !slotInfo.availableToday) continue;
+        const distance = getDistanceFromLatLonInKm(userLat, userLon, hospLat, hospLon);
 
-      // Resolve price: prefer serviceNames-parallel pricelist field, fallback to servicePrices map
-      const price: number =
-        hospitalData.servicePrices?.[service] ??
-        hospitalData.price ??
-        0;
+        const slotInfo = slotsMap[hospitalId] ?? { availableToday: false };
 
-      rawResults.push({
-        id: hospitalId,
-        ...hospitalData,
-        services: hospitalData.serviceNames ?? [],
-        lat: hospLat,
-        lon: hospLon,
-        price,
-        distance,
-        availableToday: slotInfo.availableToday,
-        nextSlot: slotInfo.nextSlot,
-      });
+        if (filters?.availableToday && !slotInfo.availableToday) continue;
+
+        // Use price from service document
+        const price: number = servicePriceMap[hospitalId] ?? 0;
+
+        rawResults.push({
+          id: hospitalId,
+          ...hospitalData,
+          services: hospitalData.serviceNames ?? [],
+          lat: hospLat,
+          lon: hospLon,
+          price,
+          distance,
+          availableToday: slotInfo.availableToday,
+          nextSlot: slotInfo.nextSlot,
+        });
+      }
     }
 
     if (rawResults.length === 0) return NextResponse.json([], { status: 200 });
 
-    // 5. Apply filters (priceRange, rating, distance)
+    // 5. Apply filters (priceRange, rating, distance, insurance)
     let filteredResults = rawResults.filter((h) => {
       if (filters?.priceRange && (h.price < filters.priceRange[0] || h.price > filters.priceRange[1])) return false;
       if (filters?.rating && (h.rating || 0) < filters.rating) return false;
       if (filters?.distance && h.distance > filters.distance) return false;
+
+      // Insurance filter
+      if (filters?.insurance) {
+        const hospitalInsurances = h.insuranceProviders ?? h.insurances ?? [];
+        if (Array.isArray(filters.insurance)) {
+          // Check if at least one insurance in the filter is accepted by hospital
+          const hasMatch = filters.insurance.some((ins: string) =>
+            hospitalInsurances.includes(ins)
+          );
+          if (!hasMatch) return false;
+        } else {
+          // Single insurance string
+          if (!hospitalInsurances.includes(filters.insurance)) return false;
+        }
+      }
+
       return true;
     });
 

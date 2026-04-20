@@ -101,9 +101,11 @@ export default function HospitalDetailPage() {
 
   useEffect(() => {
     const fetchSlots = async () => {
+      if (!selectedService?.name) return;
+
       try {
         const today = new Date().toISOString().split("T")[0]
-        const res = await fetch(`/api/hospitals/${id}/slots?date=${today}`)
+        const res = await fetch(`/api/hospitals/${id}/slots?service=${encodeURIComponent(selectedService.name)}&date=${today}`)
         const data = await res.json()
 
         if (Array.isArray(data) && data.length > 0) {
@@ -121,7 +123,7 @@ export default function HospitalDetailPage() {
     }
 
     fetchSlots()
-  }, [id])
+  }, [id, selectedService?.name])
 
   // Generate next 7 days
   const dates = Array.from({ length: 7 }, (_, i) => {
